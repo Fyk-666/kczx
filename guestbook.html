@@ -31,6 +31,7 @@
             .message-appear {
                 animation: fadeIn 0.5s ease-out;
             }
+            /* 图片预览样式 */
             .image-preview {
                 max-width: 100%;
                 max-height: 300px;
@@ -41,6 +42,7 @@
             .image-preview:hover {
                 opacity: 0.9;
             }
+            /* 图片加载中骨架屏 */
             .image-skeleton {
                 width: 100%;
                 max-height: 300px;
@@ -62,6 +64,7 @@
             @keyframes skeleton-loading {
                 100% { left: 100%; }
             }
+            /* 图片放大模态框 */
             .modal-backdrop {
                 position: fixed;
                 top: 0;
@@ -113,6 +116,7 @@
                 from { opacity: 0; transform: translateY(10px); }
                 to { opacity: 1; transform: translateY(0); }
             }
+            /* 优化版骨架屏 */
             .message-skeleton {
                 @apply bg-white rounded-xl shadow-md p-4 animate-pulse;
             }
@@ -126,7 +130,8 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800">
-    <header class="bg-black text-white py-4">
+    <!-- 导航栏 -->
+    <header class="bg-gradient-to-r from-fbc2eb to-3b75da text-white py-4">
         <div class="container mx-auto px-4">
             <div class="flex flex-col md:flex-row justify-between items-center">
                 <div class="text-2xl font-bold mb-4 md:mb-0">
@@ -134,12 +139,12 @@
                 </div>
                 <nav>
                     <ul class="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                        <li><a href="home.html" class="hover:underline hover:text-white transition-colors">首页</a></li>
-                        <li><a href="homestu.html" class="hover:underline hover:text-white transition-colors">关于我们</a></li>
-                        <li><a href="guestbook.html" class="font-bold underline text-white">资源分享</a></li>
-                        <li><a href="#" class="hover:underline hover:text-white transition-colors">学生目录</a></li>
-                        <li><a href="javascript:logout()" class="touch-friendly hover:underline hover:text-white transition-colors">退出登录</a></li>
-                        <li><span id="current-user" class="ml-2 text-sm opacity-90">（当前登录：游客）</span></li>
+                        <li><a href="home.html" class="hover:underline">首页</a></li>
+                        <li><a href="homestu.html" class="hover:underline">关于我们</a></li>
+                        <li><a href="guestbook.html" class="font-bold underline">资源分享</a></li>
+                        <li><a href="#" class="hover:underline">学生目录</a></li>
+                        <li><a href="javascript:logout()" class="touch-friendly hover:underline">退出登录</a></li>
+                        <li><span id="current-user" class="ml-2 text-sm opacity-90"></span></li>
                     </ul>
                 </nav>
             </div>
@@ -186,6 +191,7 @@
                     <p class="mt-1 text-xs text-gray-500" id="char-count">0/2000 字符</p>
                 </div>
                 
+                <!-- 图片上传区域（带压缩提示） -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">上传图片（可选，自动压缩至≤2MB，支持jpg/png/gif）</label>
                     <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -315,15 +321,11 @@
         
         // 等待DOM加载完成
         document.addEventListener('DOMContentLoaded', () => {
-            // 登录状态处理（更新当前用户显示）
-            if (checkLoginStatus()) {
-                const { username } = JSON.parse(localStorage.getItem('loginInfo'));
-                const userElement = document.getElementById('current-user');
-                if (userElement) userElement.textContent = `（当前登录：${username}）`;
-            } else {
+            if (!checkLoginStatus()) {
                 const pageContent = document.querySelector('.container.max-w-4xl');
                 const header = document.querySelector('header');
                 if (pageContent) pageContent.innerHTML = '';
+                if (header) header.style.display = 'none';
                 
                 const loginTip = document.createElement('div');
                 loginTip.style.cssText = `
@@ -334,7 +336,7 @@
                 `;
                 loginTip.innerHTML = `
                     <p>请先登录才能访问留言区</p>
-                    <button onclick="window.location.href='login.html'" style="margin-top:15px; padding:8px 20px; background:#000; color:white; border:none; border-radius:5px; cursor:pointer;">
+                    <button onclick="window.location.href='login.html'" style="margin-top:15px; padding:8px 20px; background:#3b75da; color:white; border:none; border-radius:5px; cursor:pointer;">
                         前往登录
                     </button>
                 `;
@@ -342,17 +344,34 @@
                 return;
             }
             
-            // 核心修改1：配置Cloudflare Workers代理域名（替换为你的实际域名）
-            const PROXY_DOMAIN = 'https://kczx.kk66613.workers.dev/'; // 例如：https://github-proxy.yourname.workers.dev
+            // 显示当前用户
+            const { username } = JSON.parse(localStorage.getItem('loginInfo'));
+            const userElement = document.getElementById('current-user');
+            if (userElement) userElement.textContent = `（当前登录：${username}）`;
             
-            // GitHub配置（移除Token，由Workers处理认证）
+            // 加密工具
+            const CryptoUtils = {
+                encrypt: (str, shift = 3) => btoa([...str].map(c => String.fromCharCode(c.charCodeAt(0) + shift)).join('')),
+                decrypt: (encryptedStr, shift = 3) => {
+                    try {
+                        return [...atob(encryptedStr)].map(c => String.fromCharCode(c.charCodeAt(0) - shift)).join('');
+                    } catch (e) {
+                        console.error('解密失败:', e);
+                        return '';
+                    }
+                }
+            };
+            
+            // GitHub配置
             const config = {
                 owner: "fyk-666",  
                 repo: "kczx",        
                 branch: "main",          
+                encryptedToken: "amtzYkZpcFhlb1lmZVM0PFM7R3hVRV1GekppNzRpTHdpfDdHdlk0Ug==",
                 cacheExpire: 30 * 60 * 1000, // 缓存30分钟
                 pageSize: 10 // 每页10条
             };
+            const githubConfig = { ...config, token: CryptoUtils.decrypt(config.encryptedToken) };
             
             // 全局变量
             let allMessages = [];
@@ -387,6 +406,7 @@
                 errorTips: document.getElementById('error-tips'),
                 successAlert: document.getElementById('success-alert'),
                 successMessage: document.getElementById('success-message'),
+                // 图片模态框
                 imageModal: document.getElementById('image-modal'),
                 modalClose: document.getElementById('modal-close'),
                 modalImage: document.getElementById('modal-image'),
@@ -403,13 +423,14 @@
                 });
             }
             
-            // 图片压缩函数（保持不变）
+            // 【核心优化1：图片压缩函数】限制尺寸和质量，最大2MB
             function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.8) {
                 return new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         const img = new Image();
                         img.onload = () => {
+                            // 计算压缩后的尺寸（等比例缩放）
                             let width = img.width;
                             let height = img.height;
                             if (width > maxWidth) {
@@ -421,13 +442,16 @@
                                 height = maxHeight;
                             }
                             
+                            // 使用canvas压缩
                             const canvas = document.createElement('canvas');
                             canvas.width = width;
                             canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
                             
+                            // 转换为Blob（二进制）
                             canvas.toBlob((blob) => {
+                                // 若仍超过2MB，降低质量重试
                                 if (blob.size > 2 * 1024 * 1024) {
                                     compressImage(file, maxWidth, maxHeight, quality - 0.2).then(resolve);
                                 } else {
@@ -441,34 +465,40 @@
                 });
             }
             
-            // 图片上传+压缩处理（保持不变）
+            // 【核心优化2：图片上传+压缩处理】
             async function handleImageSelect(e) {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 
+                // 验证文件类型
                 if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
                     showError('不支持的文件类型', '仅支持jpg、png、gif');
                     dom.imageUpload.value = '';
                     return;
                 }
                 
+                // 显示压缩中提示
                 dom.imagePreviewContainer.classList.remove('hidden');
                 dom.imagePreview.src = '';
                 dom.imagePreviewContainer.innerHTML = '<div class="image-skeleton w-full h-full"></div>';
                 
                 try {
+                    // 压缩图片
                     const { blob, originalSize, compressedSize } = await compressImage(file);
                     compressedImage = blob;
                     
+                    // 显示压缩后预览
                     dom.imagePreviewContainer.innerHTML = `<img id="image-preview" class="image-preview" src="" alt="预览图">`;
                     dom.imagePreview = document.getElementById('image-preview');
                     dom.imagePreview.src = URL.createObjectURL(blob);
                     
+                    // 显示压缩信息
                     dom.imageSizeError.classList.add('hidden');
                     dom.imageCompressInfo.classList.remove('hidden');
                     dom.originalSize.textContent = formatFileSize(originalSize);
                     dom.compressedSize.textContent = formatFileSize(compressedSize);
                     
+                    // 若原始文件过大，提示已压缩
                     if (originalSize > 2 * 1024 * 1024) {
                         dom.imageSizeError.classList.remove('hidden');
                     }
@@ -480,14 +510,14 @@
                 }
             }
             
-            // 格式化文件大小（保持不变）
+            // 格式化文件大小（B→KB/MB）
             function formatFileSize(bytes) {
                 if (bytes < 1024) return `${bytes}B`;
                 if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
                 return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
             }
             
-            // 拖拽上传（保持不变）
+            // 拖拽上传
             if (dom.imageDropArea && dom.imageUpload) {
                 dom.imageDropArea.addEventListener('dragover', e => {
                     e.preventDefault();
@@ -511,7 +541,7 @@
                 dom.imageUpload.addEventListener('change', handleImageSelect);
             }
             
-            // 表单提交（核心修改：使用代理地址）
+            // 表单提交（使用压缩后的图片）
             if (dom.guestbookForm) {
                 dom.guestbookForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
@@ -528,7 +558,7 @@
                     
                     try {
                         let imageUrl = null;
-                        // 上传压缩后的图片（核心修改：使用代理地址）
+                        // 上传压缩后的图片
                         if (compressedImage) {
                             const fileName = `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${compressedImage.type.split('/')[1] || 'jpg'}`;
                             
@@ -540,18 +570,19 @@
                                 reader.readAsDataURL(compressedImage);
                             });
                             
-                            // 核心修改2：通过Workers代理上传图片
+                            // 上传到GitHub
                             const res = await fetchWithTimeout(
-                                `${PROXY_DOMAIN}/repos/${config.owner}/${config.repo}/contents/images/${fileName}`, // 代理地址
+                                `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/contents/images/${fileName}`,
                                 {
                                     method: 'PUT',
                                     headers: {
-                                        'Content-Type': 'application/json' // 移除前端Token，由Workers处理
+                                        'Authorization': `token ${githubConfig.token}`,
+                                        'Content-Type': 'application/json'
                                     },
                                     body: JSON.stringify({
                                         message: `Add image: ${name}`,
                                         content: imageContent,
-                                        branch: config.branch
+                                        branch: githubConfig.branch
                                     })
                                 },
                                 15000
@@ -559,33 +590,32 @@
                             
                             if (!res.ok) throw new Error(`图片上传失败（${res.status}）`);
                             const data = await res.json();
-                            // 核心修改3：图片URL也通过代理访问
-                            imageUrl = `${PROXY_DOMAIN}/${config.owner}/${config.repo}/${config.branch}/images/${fileName}`;
+                            imageUrl = data.content.download_url;
                         }
                         
-                        // 保存留言（核心修改：使用代理地址）
+                        // 保存留言
                         const msgFileName = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Date.now().toString().slice(0, 8)}.json`;
                         const msgContent = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify({
                             id: Date.now().toString(),
                             name,
                             message,
                             imageUrl,
-                            thumbnailUrl: imageUrl ? imageUrl + '?size=300' : null,
+                            thumbnailUrl: imageUrl ? imageUrl + '?size=300' : null, // 缩略图URL（假设支持size参数）
                             timestamp: new Date().toISOString()
                         }, null, 2))));
                         
-                        // 核心修改4：通过Workers代理保存留言
                         const res = await fetchWithTimeout(
-                            `${PROXY_DOMAIN}/repos/${config.owner}/${config.repo}/contents/messages/${msgFileName}`, // 代理地址
+                            `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/contents/messages/${msgFileName}`,
                             {
                                 method: 'PUT',
                                 headers: {
-                                    'Content-Type': 'application/json' // 移除前端Token
+                                    'Authorization': `token ${githubConfig.token}`,
+                                    'Content-Type': 'application/json'
                                 },
                                 body: JSON.stringify({
                                     message: `Add message: ${name}`,
                                     content: msgContent,
-                                    branch: config.branch
+                                    branch: githubConfig.branch
                                 })
                             },
                             15000
@@ -618,7 +648,7 @@
                 });
             }
             
-            // 排序按钮（保持不变）
+            // 排序按钮
             if (dom.sortNewestBtn && dom.sortOldestBtn) {
                 const updateSortButtons = () => {
                     if (sortOrder === 'newest') {
@@ -655,12 +685,13 @@
                 });
             }
             
-            // 本地缓存工具（保持不变）
+            // 【优化1：本地缓存工具】
             const Cache = {
                 get(key) {
                     const item = localStorage.getItem(key);
                     if (!item) return null;
                     const { data, time } = JSON.parse(item);
+                    // 检查缓存是否过期
                     if (new Date().getTime() - time > config.cacheExpire) {
                         localStorage.removeItem(key);
                         return null;
@@ -675,18 +706,19 @@
                 }
             };
 
-            // 带缓存的留言加载函数（核心修改：使用代理地址）
+            // 【优化2：带缓存的留言加载函数】
             async function loadMessages(page = 1, forceRefresh = false) {
                 if (isLoading) return;
                 isLoading = true;
                 dom.loadMoreBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>加载中...';
 
                 try {
+                    // 先查缓存
                     const cacheKey = `messages_page_${page}`;
                     if (!forceRefresh) {
                         const cached = Cache.get(cacheKey);
                         if (cached) {
-                            allMessages = allMessages.concat(cached);
+                            allMessages = allMessages.concat(cached); // 合并缓存数据
                             renderMessages(cached);
                             isLoading = false;
                             updateLoadMore();
@@ -694,32 +726,28 @@
                         }
                     }
 
-                    // 核心修改5：通过Workers代理加载留言文件列表
+                    // 缓存未命中，请求GitHub API
                     const filesRes = await fetchWithTimeout(
-                        `${PROXY_DOMAIN}/repos/${config.owner}/${config.repo}/contents/messages?ref=${config.branch}`, // 代理地址
+                        `https://api.github.com/repos/${config.owner}/${config.repo}/contents/messages?ref=${config.branch}`,
                         { headers: { 'Accept': 'application/vnd.github.v3+json' } },
-                        8000
+                        8000 // 8秒超时
                     );
 
                     if (!filesRes.ok) throw new Error(`API请求失败: ${filesRes.status}`);
                     const allFiles = await filesRes.json();
-                    const jsonFiles = allFiles.filter(f => f.name.endsWith('.json')).reverse();
+                    const jsonFiles = allFiles.filter(f => f.name.endsWith('.json')).reverse(); // 倒序（最新在前）
                     totalMessages = jsonFiles.length;
-                    dom.messageCount.textContent = `共 ${totalMessages} 条留言`;
 
+                    // 分页截取（只取当前页数据）
                     const start = (page - 1) * config.pageSize;
                     const end = start + config.pageSize;
                     const currentFiles = jsonFiles.slice(start, end);
 
-                    // 批量请求当前页的留言内容
+                    // 批量请求当前页的留言内容（减少并发数）
                     const messages = [];
-                    for (const file of currentFiles) {
+                    for (const file of currentFiles) { // 改用for循环限制并发，避免请求过于密集
                         try {
-                            // 核心修改6：通过Workers代理加载留言详情（处理raw地址）
-                            // 原file.download_url是https://raw.githubusercontent.com/owner/repo/branch/path，转换为代理地址
-                            const proxyFileUrl = `${PROXY_DOMAIN}/${config.owner}/${config.repo}/${config.branch}/messages/${file.name}`;
-                            const msgRes = await fetchWithTimeout(proxyFileUrl, {}, 5000);
-                            
+                            const msgRes = await fetchWithTimeout(file.download_url, {}, 5000);
                             if (msgRes.ok) {
                                 const msg = await msgRes.json();
                                 messages.push(msg);
@@ -729,8 +757,9 @@
                         }
                     }
 
+                    // 缓存当前页数据
                     Cache.set(cacheKey, messages);
-                    allMessages = allMessages.concat(messages);
+                    allMessages = allMessages.concat(messages); // 合并到全局数据
                     renderMessages(messages);
                 } catch (e) {
                     console.error('加载失败:', e);
@@ -738,7 +767,7 @@
                         <div class="text-center py-10 bg-red-50 rounded-lg">
                             <i class="fa fa-exclamation-triangle text-4xl text-red-300 mb-3"></i>
                             <p class="text-red-700 mb-2">${e.message}</p>
-                            <button onclick="loadMessages(1, true)" class="mt-3 px-4 py-2 bg-black text-white rounded hover:bg-gray-800">
+                            <button onclick="loadMessages(1, true)" class="mt-3 px-4 py-2 bg-primary text-white rounded hover:bg-primary/90">
                                 重试加载
                             </button>
                         </div>
@@ -749,7 +778,7 @@
                 }
             }
 
-            // 排序留言（保持不变）
+            // 【优化3：排序留言】
             function sortMessages() {
                 allMessages.sort((a, b) => {
                     const timeA = new Date(a.timestamp).getTime();
@@ -758,7 +787,7 @@
                 });
             }
 
-            // 批量渲染留言（保持不变）
+            // 【优化4：批量渲染留言（减少DOM操作）】
             function renderMessages(messages) {
                 if (!dom.messagesList || !dom.loadMoreBtn) return;
 
@@ -774,7 +803,7 @@
                     return;
                 }
 
-                const fragment = document.createDocumentFragment();
+                const fragment = document.createDocumentFragment(); // 文档片段，批量插入
 
                 messages.forEach(msg => {
                     const el = document.createElement('div');
@@ -782,11 +811,11 @@
                     
                     let content = `<div class="text-gray-700 whitespace-pre-line">${escapeHtml(msg.message)}</div>`;
                     if (msg.imageUrl) {
-                        // 图片URL已通过代理，直接使用
-                        const thumbnailUrl = msg.thumbnailUrl || msg.imageUrl;
+                        // 使用缩略图懒加载（优先加载小图）
+                        const thumbnailUrl = msg.thumbnailUrl || msg.imageUrl; // 优先用缩略图
                         content += `
                             <div class="mt-3 rounded-lg overflow-hidden border border-gray-100">
-                                <div class="image-skeleton w-full" style="padding-top: 56.25%;">
+                                <div class="image-skeleton w-full" style="padding-top: 56.25%;"> <!-- 16:9比例占位 -->
                                     <img 
                                         data-src="${thumbnailUrl}" 
                                         class="lazy-load image-preview absolute top-0 left-0 w-full h-full" 
@@ -815,11 +844,11 @@
                     fragment.appendChild(el);
                 });
 
-                dom.messagesList.appendChild(fragment);
-                initLazyLoad();
+                dom.messagesList.appendChild(fragment); // 一次插入所有节点，减少重排
+                initLazyLoad(); // 初始化当前页的图片懒加载
             }
 
-            // 图片懒加载初始化（保持不变）
+            // 【优化5：图片懒加载初始化】
             function initLazyLoad() {
                 const lazyImages = document.querySelectorAll('img.lazy-load:not(.loaded)');
                 if ('IntersectionObserver' in window) {
@@ -827,20 +856,22 @@
                         entries.forEach(entry => {
                             if (entry.isIntersecting) {
                                 const img = entry.target;
-                                img.src = img.dataset.src;
+                                img.src = img.dataset.src; // 加载真实图片
                                 img.classList.remove('lazy-load');
                                 img.classList.add('loaded');
-                                observer.unobserve(img);
+                                observer.unobserve(img); // 停止观察
                                 
+                                // 图片加载失败时显示占位图
                                 img.onerror = () => {
                                     img.src = 'https://via.placeholder.com/300?text=图片加载失败';
                                 };
                             }
                         });
-                    }, { rootMargin: '200px' });
+                    }, { rootMargin: '200px' }); // 提前200px开始加载
 
                     lazyImages.forEach(img => observer.observe(img));
                 } else {
+                    // 降级处理（兼容旧浏览器）
                     lazyImages.forEach(img => {
                         img.src = img.dataset.src;
                         img.classList.remove('lazy-load');
@@ -849,14 +880,16 @@
                 }
             }
 
-            // 图片放大模态框初始化（保持不变）
+            // 【核心优化4：图片放大模态框】
             function initImageModal() {
+                // 关闭模态框
                 dom.modalClose.addEventListener('click', () => {
                     dom.imageModal.classList.remove('active');
                     dom.modalImage.classList.add('hidden');
                     dom.modalLoading.classList.remove('hidden');
                 });
                 
+                // 点击模态框背景关闭
                 dom.imageModal.addEventListener('click', (e) => {
                     if (e.target === dom.imageModal) {
                         dom.imageModal.classList.remove('active');
@@ -866,13 +899,14 @@
                 });
             }
             
-            // 打开图片模态框（保持不变）
+            // 打开图片模态框
             function openImageModal(url) {
                 dom.imageModal.classList.add('active');
                 dom.modalImage.classList.add('hidden');
                 dom.modalLoading.classList.remove('hidden');
-                dom.modalImage.src = '';
+                dom.modalImage.src = ''; // 重置图片
                 
+                // 加载高清图
                 const img = new Image();
                 img.onload = () => {
                     dom.modalImage.src = url;
@@ -887,7 +921,7 @@
                 img.src = url;
             }
 
-            // 更新加载更多按钮状态（保持不变）
+            // 更新加载更多按钮状态
             function updateLoadMore() {
                 if (!dom.loadMoreBtn) return;
                 if (currentPage * config.pageSize >= totalMessages) {
@@ -901,8 +935,16 @@
                 }
             }
 
-            // 工具函数：超时请求（保持不变）
-            function fetchWithTimeout(url, options, timeout = 30000) {
+            // 绑定加载更多事件
+            if (dom.loadMoreBtn) {
+                dom.loadMoreBtn.addEventListener('click', () => {
+                    currentPage++;
+                    loadMessages(currentPage);
+                });
+            }
+
+            // 工具函数：超时请求
+            function fetchWithTimeout(url, options, timeout = 10000) {
                 return Promise.race([
                     fetch(url, options),
                     new Promise((_, reject) => 
@@ -911,7 +953,7 @@
                 ]);
             }
 
-            // 工具函数：格式化日期（保持不变）
+            // 工具函数：格式化日期
             function formatDate(dateStr) {
                 return new Intl.DateTimeFormat('zh-CN', {
                     year: 'numeric', month: 'long', day: 'numeric',
@@ -919,7 +961,7 @@
                 }).format(new Date(dateStr));
             }
 
-            // 工具函数：防XSS（保持不变）
+            // 工具函数：防XSS
             function escapeHtml(str) {
                 return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
